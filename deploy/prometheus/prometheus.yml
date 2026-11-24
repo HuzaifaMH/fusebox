@@ -1,0 +1,3 @@
+# Fusebox pushes its metrics to Prometheus over OpenTelemetry (OTLP), so there is nothing to scrape.
+global:
+  evaluation_interval: 15s

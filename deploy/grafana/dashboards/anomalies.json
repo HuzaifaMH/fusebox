@@ -1,0 +1,351 @@
+{
+  "uid": "fusebox-anomalies",
+  "title": "Fusebox: Anomalies & alerts",
+  "description": "What Fusebox noticed, why it thinks it happened, and who was told.",
+  "tags": [
+    "fusebox"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "15s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "table",
+      "title": "Anomalies, last 24 hours",
+      "description": "Explanations come from a rule engine that works out what changed. When an LLM is switched on it only rewrites them, and is labelled AI-suggested.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT a.opened_at AS \"Opened\",\n       a.state AS \"State\",\n       a.tenant_id AS \"Tenant\",\n       a.route_id AS \"Route\",\n       a.signal AS \"Signal\",\n       round(a.peak_ratio::numeric, 1) AS \"Peak (x normal)\",\n       d.diagnosis AS \"Why\",\n       d.remediation AS \"Next step\",\n       CASE d.source WHEN 'llm' THEN 'AI-suggested' WHEN 'template' THEN 'Rules' END AS \"Explained by\"\nFROM anomalies a\nLEFT JOIN anomaly_diagnoses d ON d.anomaly_id = a.id\nWHERE a.opened_at >= now() - interval '1 day'\nORDER BY a.opened_at DESC\nLIMIT 100",
+          "format": "table",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "rawQuery": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Opened"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsLocal"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Why"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 420
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Next step"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 300
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "State"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "open": {
+                        "color": "red",
+                        "text": "open"
+                      },
+                      "closed": {
+                        "color": "green",
+                        "text": "ended"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "id": 1,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 11
+      }
+    },
+    {
+      "type": "table",
+      "title": "Alerts, last 24 hours",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT opened_at AS \"Opened\",\n       status AS \"Status\",\n       severity AS \"Severity\",\n       title AS \"Alert\",\n       summary AS \"What happened\",\n       resolved_at AS \"Resolved\"\nFROM alerts\nWHERE opened_at >= now() - interval '1 day'\nORDER BY opened_at DESC\nLIMIT 100",
+          "format": "table",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "rawQuery": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Opened"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsLocal"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Resolved"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsLocal"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "What happened"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 460
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {
+                        "color": "red",
+                        "text": "critical"
+                      },
+                      "warning": {
+                        "color": "orange",
+                        "text": "warning"
+                      },
+                      "info": {
+                        "color": "blue",
+                        "text": "info"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "id": 2,
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 24,
+        "h": 9
+      }
+    },
+    {
+      "type": "table",
+      "title": "Notifications and whether they arrived, last 24 hours",
+      "description": "Every alert is saved before it is sent and retried until the channel confirms it.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT COALESCE(sent_at, created_at) AS \"When\",\n       channel AS \"Channel\",\n       event AS \"Event\",\n       severity AS \"Severity\",\n       status AS \"Status\",\n       attempts AS \"Attempts\",\n       last_error AS \"Last problem\"\nFROM alert_deliveries\nWHERE created_at >= now() - interval '1 day'\nORDER BY created_at DESC\nLIMIT 100",
+          "format": "table",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "rawQuery": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "When"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsLocal"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "id": 3,
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 24,
+        "h": 8
+      }
+    }
+  ],
+  "links": [
+    {
+      "title": "Overview",
+      "type": "link",
+      "url": "/d/fusebox-overview",
+      "icon": "dashboard"
+    },
+    {
+      "title": "Spend & budgets",
+      "type": "link",
+      "url": "/d/fusebox-spend",
+      "icon": "dashboard"
+    },
+    {
+      "title": "Anomalies & alerts",
+      "type": "link",
+      "url": "/d/fusebox-anomalies",
+      "icon": "dashboard"
+    }
+  ]
+}

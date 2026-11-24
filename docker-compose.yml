@@ -1,0 +1,129 @@
+# The whole system on one machine:  docker compose up --build
+#
+#   http://localhost:3000   Grafana (dashboards, no login needed to look)
+#   http://localhost:8080   the gateway:  /healthz, and the admin API at /admin/swagger
+#   http://localhost:9090   Prometheus
+#   http://localhost:8081   the demo app, whose /alerts page lists the alerts Fusebox delivered
+#
+# Every password and key below is for this demo only. Do not reuse them.
+name: fusebox
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: fusebox
+      POSTGRES_PASSWORD: demo-only-password
+      POSTGRES_DB: fusebox
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fusebox -d fusebox"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  gateway:
+    build:
+      context: .
+      target: gateway
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports:
+      - "8080:8080"
+    environment:
+      # Budgets are counted in Redis, so any number of gateway instances share them.
+      Fusebox__Enforcement__Store: Redis
+      Fusebox__Enforcement__Redis__ConnectionString: redis:6379
+
+      # Tenants and prices live in PostgreSQL and are managed through the admin API.
+      Fusebox__CatalogSource__Kind: Postgres
+      Fusebox__CatalogSource__SyncInterval: "00:00:03"
+      Fusebox__CatalogSource__Postgres__ConnectionString: &db "Host=postgres;Username=fusebox;Password=demo-only-password;Database=fusebox"
+
+      # Request records, then anomaly detection and diagnosis on top of them. The detection settings are loosened so the
+      # demo's runaway tenant is noticed within minutes instead of needing hours of history.
+      Fusebox__Telemetry__Store: Postgres
+      Fusebox__Telemetry__Postgres__ConnectionString: *db
+      Fusebox__Detection__Enabled: "true"
+      Fusebox__Detection__MinRecentSamples: "8"
+      # A new series gets its first usable baseline at the next refresh after it has enough history. The default refresh is
+      # every 10 minutes, which would leave the first few runaway minutes unwatched in a demo that has only just started.
+      Fusebox__Detection__BaselineRefreshInterval: "00:02:00"
+      Fusebox__Diagnosis__Enabled: "true"
+
+      # Alerts go to the demo app's webhook. Critical ones would page through PagerDuty if it were set up; with only the
+      # webhook configured they fall back to it.
+      Fusebox__Alerting__Enabled: "true"
+      Fusebox__Alerting__Webhook__Url: http://demo:8080/alerts
+      Fusebox__Alerting__DiagnosisGrace: "00:00:20"
+
+      # Metrics are pushed to Prometheus.
+      Fusebox__Observability__OtlpEndpoint: http://prometheus:9090/api/v1/otlp/v1/metrics
+
+      # The admin API. The key is "demo-admin-key"; only its hash is configured.
+      Fusebox__Admin__Enabled: "true"
+      Fusebox__Admin__ApiKeyHash: ac5bb3526d3be432ba19fb1fc0712d350c160bd2169cd24401c9fcaeaac2d860
+
+      # The "vendor" is the demo app, which asks for no real key.
+      ReverseProxy__Clusters__openai__Destinations__primary__Address: http://demo:8080/
+      Fusebox__Upstreams__Keys__openai: demo-vendor-key
+
+  demo:
+    build:
+      context: .
+      target: demo
+    depends_on:
+      - gateway
+    ports:
+      - "8081:8080"
+    environment:
+      Demo__GatewayUrl: http://gateway:8080
+      Demo__AdminKey: demo-admin-key
+      # Minutes after start when the stand-in vendor fails for three minutes, so Fusebox cuts it off and alerts.
+      Demo__OutageAfter: ${DEMO_OUTAGE_AFTER:-00:24:00}
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-otlp-receiver
+      - --storage.tsdb.retention.time=2d
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    depends_on:
+      - prometheus
+      - postgres
+    ports:
+      - "3000:3000"
+    environment:
+      # Anyone can look. Changing things needs the admin login (admin / admin).
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/overview.json
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  postgres-data:
+  prometheus-data:
+  grafana-data:

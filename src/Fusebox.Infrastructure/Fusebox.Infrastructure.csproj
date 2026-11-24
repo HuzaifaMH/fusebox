@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Infrastructure layer: Redis, configuration-backed catalogs and vendor protocol adapters. -->
+  <PropertyGroup>
+    <RootNamespace>Fusebox.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Fusebox.Application\Fusebox.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StackExchange.Redis" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Redis\Scripts\*.lua" />
+    <EmbeddedResource Include="Catalog\Postgres\Schema\*.sql" />
+    <EmbeddedResource Include="Telemetry\Postgres\Schema\*.sql" />
+    <EmbeddedResource Include="Detection\Postgres\Schema\*.sql" />
+    <EmbeddedResource Include="Diagnosis\Postgres\Schema\*.sql" />
+    <EmbeddedResource Include="Alerting\Postgres\Schema\*.sql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Fusebox.Infrastructure.Tests" />
+  </ItemGroup>
+
+</Project>

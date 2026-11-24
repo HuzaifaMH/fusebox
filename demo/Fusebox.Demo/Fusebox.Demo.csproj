@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Only for the docker compose demo: a stand-in for a paid vendor API, a place for alerts to land, and a steady stream of
+    calls (with one runaway tenant) so the dashboards have something to show. Nothing here ships with the gateway.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Fusebox.Demo</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

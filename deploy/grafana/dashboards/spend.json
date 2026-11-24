@@ -1,0 +1,526 @@
+{
+  "uid": "fusebox-spend",
+  "title": "Fusebox: Spend & budgets",
+  "description": "Who is spending what, on which routes and models, and how close each tenant is to its budget.",
+  "tags": [
+    "fusebox"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "15s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "templating": {
+    "list": [
+      {
+        "name": "tenant",
+        "label": "Tenant",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "postgres"
+        },
+        "query": "SELECT DISTINCT tenant_id FROM rollups_hour ORDER BY 1",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "table",
+      "title": "Budget used in the current window",
+      "description": "Read from the per-minute totals, so it trails the live counter by a minute or two.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT t.id AS \"Tenant\",\n       t.budget_limit_micro_usd / 1000000.0 AS \"Budget (USD)\",\n       COALESCE(s.spent, 0) / 1000000.0 AS \"Spent (USD)\",\n       COALESCE(s.spent, 0)::float8 / t.budget_limit_micro_usd AS \"Used\",\n       to_char(make_interval(secs => t.budget_window_seconds), 'HH24:MI') AS \"Window\",\n       to_timestamp(floor(extract(epoch FROM now()) / t.budget_window_seconds) * t.budget_window_seconds\n                    + t.budget_window_seconds) AS \"Resets\"\nFROM tenants t\nLEFT JOIN LATERAL (\n    SELECT sum(r.cost_micro_usd) AS spent\n    FROM rollups_minute r\n    WHERE r.tenant_id = t.id\n      AND r.bucket >= to_timestamp(floor(extract(epoch FROM now()) / t.budget_window_seconds) * t.budget_window_seconds)\n) s ON true\nWHERE t.enabled\nORDER BY \"Used\" DESC",
+          "format": "table",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "rawQuery": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.7
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.9
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Budget (USD)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Spent (USD)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Resets"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsLocal"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "id": 1,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 6
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Spend by tenant",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__timeGroupAlias(bucket, $__interval),\n       tenant_id AS metric,\n       sum(cost_micro_usd) / 1000000.0 AS spend\nFROM rollups_minute\nWHERE $__timeFilter(bucket) AND tenant_id IN ($tenant)\nGROUP BY 1, 2\nORDER BY 1",
+          "format": "time_series",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "rawQuery": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 2,
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Spend by route",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__timeGroupAlias(bucket, $__interval),\n       route_id AS metric,\n       sum(cost_micro_usd) / 1000000.0 AS spend\nFROM rollups_minute\nWHERE $__timeFilter(bucket) AND tenant_id IN ($tenant)\nGROUP BY 1, 2\nORDER BY 1",
+          "format": "time_series",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "rawQuery": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 3,
+      "gridPos": {
+        "x": 8,
+        "y": 7,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Spend by model",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__timeGroupAlias(bucket, $__interval),\n       model AS metric,\n       sum(cost_micro_usd) / 1000000.0 AS spend\nFROM rollups_minute\nWHERE $__timeFilter(bucket) AND tenant_id IN ($tenant)\nGROUP BY 1, 2\nORDER BY 1",
+          "format": "time_series",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "rawQuery": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 4,
+      "gridPos": {
+        "x": 16,
+        "y": 7,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Calls by outcome",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__timeGroupAlias(bucket, $__interval),\n       sum(forwarded) AS \"served\",\n       sum(denied) AS \"refused: budget or price\",\n       sum(rejected) AS \"rejected: bad request\",\n       sum(unavailable) AS \"unavailable\",\n       sum(errors) AS \"vendor errors\",\n       sum(repeats) AS \"repeated calls\"\nFROM rollups_minute\nWHERE $__timeFilter(bucket) AND tenant_id IN ($tenant)\nGROUP BY 1\nORDER BY 1",
+          "format": "time_series",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "rawQuery": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 5,
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Average latency by route",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__timeGroupAlias(bucket, $__interval),\n       route_id AS metric,\n       sum(duration_ms_sum)::float8 / NULLIF(sum(requests), 0) AS latency_ms\nFROM rollups_minute\nWHERE $__timeFilter(bucket) AND tenant_id IN ($tenant)\nGROUP BY 1, 2\nORDER BY 1",
+          "format": "time_series",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "rawQuery": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 6,
+      "gridPos": {
+        "x": 8,
+        "y": 15,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tokens per call",
+      "description": "A jump here is the signature of a prompt that grew or an answer that got longer.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "postgres"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__timeGroupAlias(bucket, $__interval),\n       sum(input_tokens)::float8 / NULLIF(sum(forwarded), 0) AS \"input per call\",\n       sum(output_tokens)::float8 / NULLIF(sum(forwarded), 0) AS \"output per call\"\nFROM rollups_minute\nWHERE $__timeFilter(bucket) AND tenant_id IN ($tenant)\nGROUP BY 1\nORDER BY 1",
+          "format": "time_series",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "postgres"
+          },
+          "editorMode": "code",
+          "rawQuery": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 7,
+      "gridPos": {
+        "x": 16,
+        "y": 15,
+        "w": 8,
+        "h": 8
+      }
+    }
+  ],
+  "links": [
+    {
+      "title": "Overview",
+      "type": "link",
+      "url": "/d/fusebox-overview",
+      "icon": "dashboard"
+    },
+    {
+      "title": "Spend & budgets",
+      "type": "link",
+      "url": "/d/fusebox-spend",
+      "icon": "dashboard"
+    },
+    {
+      "title": "Anomalies & alerts",
+      "type": "link",
+      "url": "/d/fusebox-anomalies",
+      "icon": "dashboard"
+    }
+  ]
+}

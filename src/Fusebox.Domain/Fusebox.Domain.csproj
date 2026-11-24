@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Domain layer: pure business rules. No package or project dependencies. -->
+  <PropertyGroup>
+    <RootNamespace>Fusebox.Domain</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Fusebox.Domain.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,24 @@
+apiVersion: 1
+
+datasources:
+  # Gateway metrics: request rates, latency, refusals, degraded mode, the telemetry queue and alert deliveries.
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+
+  # Per-tenant, per-route and per-model history, read from the rollup tables, plus anomalies and alerts.
+  - name: Fusebox database
+    uid: postgres
+    type: grafana-postgresql-datasource
+    access: proxy
+    url: postgres:5432
+    user: grafana
+    jsonData:
+      database: fusebox
+      sslmode: disable
+      postgresVersion: 1700
+    secureJsonData:
+      password: demo-only-grafana-password

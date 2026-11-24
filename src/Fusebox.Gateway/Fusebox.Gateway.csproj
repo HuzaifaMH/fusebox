@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- Host: composes the layers and hosts the YARP proxy pipeline. -->
+  <PropertyGroup>
+    <RootNamespace>Fusebox.Gateway</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Fusebox.Application\Fusebox.Application.csproj" />
+    <ProjectReference Include="..\Fusebox.Infrastructure\Fusebox.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Yarp.ReverseProxy" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Fusebox.Gateway.Tests" />
+  </ItemGroup>
+
+</Project>
